@@ -8,6 +8,7 @@ using System.Linq;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 using System.Threading;
+using System.Diagnostics;
 
 namespace IndustrialPark
 {
@@ -33,18 +34,22 @@ namespace IndustrialPark
 
         private void StartRenderer()
         {
+//#if !DEBUG
             new Thread(() =>
             {
+//#endif
                 if (InvokeRequired)
                     Invoke(new StartLoop(renderer.RunMainLoop), renderPanel);
                 else
                     renderer.RunMainLoop(renderPanel);
+//#if !DEBUG
             }).Start();
+//#endif
         }
         
-        public static string pathToSettings => Application.StartupPath + "/ip_settings.json";
+        public static string pathToSettings => Path.Combine(Application.StartupPath, "ip_settings.json");
         private string currentProjectPath;
-        public string userTemplatesFolder => Application.StartupPath + "/Resources/UserTemplates/";
+        public string userTemplatesFolder => Path.Combine(Application.StartupPath, "Resources", "UserTemplates");
 
         private void MainForm_Load(object sender, EventArgs e)
         {
@@ -61,7 +66,7 @@ namespace IndustrialPark
                 if (settings.CheckForUpdatesOnStartup && AutomaticUpdater.UpdateIndustrialPark(out _))
                 {
                     Close();
-                    System.Diagnostics.Process.Start(Application.StartupPath + "/IndustrialPark.exe");
+                    Process.Start(Path.Combine(Application.StartupPath, "IndustrialPark.exe"));
                 }
                 
                 string[] args = Environment.GetCommandLineArgs();
@@ -81,7 +86,11 @@ namespace IndustrialPark
             }
             else
             {
-                MessageBox.Show("It appears this is your first time using Industrial Park.\nPlease consult the documentation on the BFBB Modding Wiki to understand how to use the tool if you haven't already.\nAlso, be sure to check individual asset pages if you're not sure what one of them or their settings do.");
+                MessageBox.Show(
+                    "It appears this is your first time using Industrial Park.\n" +
+                    "Please consult the documentation on the BFBB Modding Wiki to understand how to use the tool if you haven't already.\n" +
+                    "Also, be sure to check individual asset pages if you're not sure what one of them or their settings do."
+                );
                 Program.AboutBox.Show();
             }
 
@@ -95,9 +104,7 @@ namespace IndustrialPark
         {
             if (UnsavedChanges())
             {
-                TopMost = true;
-                DialogResult result = MessageBox.Show("You appear to have unsaved changes in one of your Archive Editors. Do you wish to save them before closing?", "Warning", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
-                TopMost = false;
+                DialogResult result = notifyUnsavedChanges();
                 if (result == DialogResult.Yes)
                     SaveAllChanges();
                 else if (result == DialogResult.Cancel)
@@ -143,13 +150,21 @@ namespace IndustrialPark
                 e.Effect = DragDropEffects.Copy;
         }
 
+        private DialogResult notifyUnsavedChanges() {
+            TopMost = true;
+            DialogResult result = MessageBox.Show(
+                "You appear to have unsaved changes in one of your Archive Editors. Do you wish to save them before closing?", 
+                "Warning", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning
+            );
+            TopMost = false;
+            return result;
+        }
+
         private void newToolStripMenuItem1_Click(object sender, EventArgs e)
         {
             if (UnsavedChanges())
             {
-                TopMost = true;
-                DialogResult result = MessageBox.Show("You appear to have unsaved changes in one of your Archive Editors. Do you wish to save them before closing?", "Warning", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
-                TopMost = false;
+                DialogResult result = notifyUnsavedChanges();
                 if (result == DialogResult.Yes)
                     SaveAllChanges();
                 else if (result == DialogResult.Cancel)
@@ -165,9 +180,7 @@ namespace IndustrialPark
         {
             if (UnsavedChanges())
             {
-                TopMost = true;
-                DialogResult result = MessageBox.Show("You appear to have unsaved changes in one of your Archive Editors. Do you wish to save them before closing?", "Warning", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
-                TopMost = false;
+                DialogResult result = notifyUnsavedChanges();
                 if (result == DialogResult.Yes)
                     SaveAllChanges();
                 else if (result == DialogResult.Cancel)
@@ -201,9 +214,9 @@ namespace IndustrialPark
         private void SaveProject(string fileName)
         {
             if (string.IsNullOrWhiteSpace(fileName))
-                fileName = Application.StartupPath + "/default_project.json";
+                fileName = Path.Combine(Application.StartupPath, "default_project.json");
             currentProjectPath = fileName;
-            SaveProject();
+            SaveProject(); 
         }
 
         private void SaveProject()
@@ -232,7 +245,7 @@ namespace IndustrialPark
             if (AutomaticUpdater.UpdateIndustrialPark(out bool hasChecked))
             {
                 Close();
-                System.Diagnostics.Process.Start(Application.StartupPath + "/IndustrialPark.exe");
+                Process.Start(Path.Combine(Application.StartupPath, "IndustrialPark.exe"));
             }
             else if (hasChecked)
                 MessageBox.Show("No update found.");
@@ -484,11 +497,6 @@ namespace IndustrialPark
             oldMousePosition = e;
         }
 
-        private void MouseModeToggle()
-        {
-            mouseMode = !mouseMode;
-        }
-
         private void ResetMouseCenter(object sender, EventArgs e)
         {
             MouseCenter = renderPanel.PointToScreen(new System.Drawing.Point(renderPanel.Width / 2, renderPanel.Height / 2));
@@ -501,35 +509,50 @@ namespace IndustrialPark
             if (!PressedKeys.Contains(e.KeyCode))
                 PressedKeys.Add(e.KeyCode);
 
-            if (e.KeyCode == Keys.Z)
-                MouseModeToggle();
-            else if (e.KeyCode == Keys.Q)
-                renderer.Camera.IncreaseCameraSpeed(-1);
-            else if (e.KeyCode == Keys.E)
-                renderer.Camera.IncreaseCameraSpeed(1);
-            else if (e.KeyCode == Keys.D1)
-                renderer.Camera.IncreaseCameraRotationSpeed(-1);
-            else if (e.KeyCode == Keys.D3)
-                renderer.Camera.IncreaseCameraRotationSpeed(1);
-            else if (e.KeyCode == Keys.C)
-                ToggleCulling();
-            else if (e.KeyCode == Keys.F)
-                ToggleWireFrame();
-            else if (e.KeyCode == Keys.G)
-                OpenInternalEditors();
-            else if (e.KeyCode == Keys.V)
-                ToggleGizmoType();
-            else if (e.KeyCode == Keys.Delete)
-                DeleteSelectedAssets();
-            else if (e.KeyCode == Keys.U)
-                uIModeToolStripMenuItem_Click(null, null);
-
-            if (e.KeyCode == Keys.F1)
-                Program.ViewConfig.Show();
-            else if (e.KeyCode == Keys.F4)
-                saveAllOpenHIPsToolStripMenuItem_Click(sender, e);
-            else if (e.KeyCode == Keys.F5)
-                TryToRunGame();
+            switch (e.KeyCode) {
+                case Keys.Q:
+                    renderer.Camera.IncreaseCameraSpeed(-1);
+                    break;
+                case Keys.E:
+                    renderer.Camera.IncreaseCameraSpeed(1);
+                    break;
+                case Keys.U:
+                    uIModeToolStripMenuItem_Click(null, null);
+                    break;
+                case Keys.F:
+                    ToggleWireFrame();
+                    break;
+                case Keys.G:
+                    OpenInternalEditors();
+                    break;
+                case Keys.Z:
+                    mouseMode = !mouseMode;
+                    break;
+                case Keys.C:
+                    ToggleCulling(); 
+                    break;
+                case Keys.V:
+                    ToggleGizmoType();
+                    break;
+                case Keys.Delete:
+                    DeleteSelectedAssets();
+                    break;
+                case Keys.F1:
+                    Program.ViewConfig.Show();
+                    break;
+                case Keys.F4:
+                    saveAllOpenHIPsToolStripMenuItem_Click(sender, e);
+                    break;
+                case Keys.F5:
+                    TryToRunGame();
+                    break;
+                case Keys.D1:
+                    renderer.Camera.IncreaseCameraRotationSpeed(-1);
+                    break;
+                case Keys.D3:
+                    renderer.Camera.IncreaseCameraRotationSpeed(1);
+                    break;
+            }
         }
 
         private void MainForm_KeyUp(object sender, KeyEventArgs e)
@@ -547,29 +570,41 @@ namespace IndustrialPark
             if (renderer.isDrawingUI)
                 return;
 
-            if (PressedKeys.Contains(Keys.A) & PressedKeys.Contains(Keys.ControlKey))
-                renderer.Camera.AddYaw(-0.05f);
-            else if (PressedKeys.Contains(Keys.A))
-                renderer.Camera.AddPositionSideways(0.25f);
+            if (PressedKeys.Contains(Keys.W)) 
+            { 
+                if (PressedKeys.Contains(Keys.ControlKey))
+                    renderer.Camera.AddPitch(-0.05f);
+                else if (PressedKeys.Contains(Keys.ShiftKey))
+                    renderer.Camera.AddPositionUp(0.25f);
+                else 
+                    renderer.Camera.AddPositionForward(0.25f);
+            }
 
-            if (PressedKeys.Contains(Keys.D) & PressedKeys.Contains(Keys.ControlKey))
-                renderer.Camera.AddYaw(0.05f);
-            else if (PressedKeys.Contains(Keys.D))
-                renderer.Camera.AddPositionSideways(-0.25f);
+            if (PressedKeys.Contains(Keys.A)) 
+            { 
+                if (PressedKeys.Contains(Keys.ControlKey))
+                    renderer.Camera.AddYaw(-0.05f);
+                else 
+                    renderer.Camera.AddPositionSideways(0.25f);
+            }
 
-            if (PressedKeys.Contains(Keys.W) & PressedKeys.Contains(Keys.ControlKey))
-                renderer.Camera.AddPitch(-0.05f);
-            else if (PressedKeys.Contains(Keys.W) & PressedKeys.Contains(Keys.ShiftKey))
-                renderer.Camera.AddPositionUp(0.25f);
-            else if (PressedKeys.Contains(Keys.W))
-                renderer.Camera.AddPositionForward(0.25f);
+            if (PressedKeys.Contains(Keys.S)) 
+            { 
+                if (PressedKeys.Contains(Keys.ControlKey))
+                    renderer.Camera.AddPitch(0.05f);
+                else if (PressedKeys.Contains(Keys.ShiftKey))
+                    renderer.Camera.AddPositionUp(-0.25f);
+                else
+                    renderer.Camera.AddPositionForward(-0.25f);
+            }
 
-            if (PressedKeys.Contains(Keys.S) & PressedKeys.Contains(Keys.ControlKey))
-                renderer.Camera.AddPitch(0.05f);
-            else if (PressedKeys.Contains(Keys.S) & PressedKeys.Contains(Keys.ShiftKey))
-                renderer.Camera.AddPositionUp(-0.25f);
-            else if (PressedKeys.Contains(Keys.S))
-                renderer.Camera.AddPositionForward(-0.25f);
+            if (PressedKeys.Contains(Keys.D)) 
+            { 
+                if (PressedKeys.Contains(Keys.ControlKey))
+                    renderer.Camera.AddYaw(0.05f);
+                else
+                    renderer.Camera.AddPositionSideways(-0.25f);
+            }
 
             if (PressedKeys.Contains(Keys.R))
                 renderer.Camera.Reset();
@@ -1036,10 +1071,7 @@ namespace IndustrialPark
                 if (archiveEditor.HasAsset(assetID))
                     return true;
 
-            if (ArchiveEditorFunctions.nameDictionary.ContainsKey(assetID))
-                return true;
-
-            return false;
+            return ArchiveEditorFunctions.nameDictionary.ContainsKey(assetID);
         }
 
         public void FindWhoTargets(uint assetID)
@@ -1050,7 +1082,10 @@ namespace IndustrialPark
             if (whoTargets.Count > 15)
             {
                 TopMost = true;
-                willOpen = MessageBox.Show($"Warning: you're going to open {whoTargets.Count} Asset Data Editor windows. Are you sure you want to do that?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+                willOpen = MessageBox.Show(
+                    $"Warning: you're going to open {whoTargets.Count} Asset Data Editor windows. Are you sure you want to do that?", 
+                    "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning
+                ) == DialogResult.Yes;
                 TopMost = false;
             }
 
@@ -1088,7 +1123,10 @@ namespace IndustrialPark
 
         private void ensureAssociationsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            DialogResult result = MessageBox.Show("Will set Industrial Park as default application for HIP and HOP file formats on registry.", "Associate HIP/HOP files", MessageBoxButtons.OKCancel);
+            DialogResult result = MessageBox.Show(
+                "Will set Industrial Park as default application for HIP and HOP file formats on registry.", 
+                "Associate HIP/HOP files", MessageBoxButtons.OKCancel
+            );
             if (result == DialogResult.OK)
                 FileAssociations.FileAssociations.EnsureAssociationsSet();
         }
@@ -1170,10 +1208,24 @@ namespace IndustrialPark
         {
             GizmoMode outMode = ArchiveEditorFunctions.ToggleGizmoType(mode);
 
-            positionToolStripMenuItem.Checked = outMode == GizmoMode.Position;
-            rotationToolStripMenuItem.Checked = outMode == GizmoMode.Rotation;
-            scaleToolStripMenuItem.Checked = outMode == GizmoMode.Scale;
-            positionLocalToolStripMenuItem.Checked = outMode == GizmoMode.PositionLocal;
+            positionToolStripMenuItem.Checked = false;
+            rotationToolStripMenuItem.Checked = false;
+            scaleToolStripMenuItem.Checked = false;
+            positionLocalToolStripMenuItem.Checked = false;
+            switch (outMode) {
+                case GizmoMode.Position:
+                    positionToolStripMenuItem.Checked = true;
+                    break;
+                case GizmoMode.Rotation:
+                    rotationToolStripMenuItem.Checked = true;
+                    break;
+                case GizmoMode.Scale:
+                    scaleToolStripMenuItem.Checked = true;
+                    break;
+                case GizmoMode.PositionLocal:
+                    positionLocalToolStripMenuItem.Checked = true;
+                    break;
+            }
         }
 
         private void positionToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1208,25 +1260,11 @@ namespace IndustrialPark
         
         private void MainForm_Resize(object sender, EventArgs e)
         {
-            try
-            {
-                if (WindowState == FormWindowState.Minimized)
-                {
-                    ArchiveEditorFunctions.allowRender = false;
-                    SetAllTopMost(false);
-                }
-                else
-                {
-                    ArchiveEditorFunctions.allowRender = true;
-                    SetAllTopMost(true);
-                }
-            }
-            catch
-            {
-            }
+             ArchiveEditorFunctions.allowRender = WindowState != FormWindowState.Minimized;
+             //SetAllTopMost(WindowState != FormWindowState.Minimized);
         }
 
-        private bool allTopMost = true;
+        private bool allTopMost = false;
 
         private void SetAllTopMost(bool value)
         {
@@ -1250,7 +1288,7 @@ namespace IndustrialPark
 
         private void TryToRunGame()
         {
-            string dolPath = null;
+            string dolPath = string.Empty;
             foreach (var ae in archiveEditors) 
             {
                 string hipName = ae.GetCurrentlyOpenFileName().ToLower();
@@ -1263,10 +1301,11 @@ namespace IndustrialPark
 
                 if (File.Exists(dolPath))
                     break;
-                dolPath = null;
+
+                dolPath = string.Empty;
             }
 
-            if (dolPath == null)
+            if (dolPath == string.Empty)
                 MessageBox.Show("Unable to find DOL to launch.");
             else RemoteControl.TryToRunGame(dolPath);
         }
